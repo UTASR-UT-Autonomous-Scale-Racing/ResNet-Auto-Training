@@ -97,7 +97,9 @@ class RandomIoUCrop(nn.Module):
 
         if isinstance(image, torch.Tensor):
             if image.ndimension() not in {2, 3}:
-                raise ValueError(f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
+                raise ValueError(
+                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions."
+                )
             elif image.ndimension() == 2:
                 image = image.unsqueeze(0)
 
@@ -107,7 +109,9 @@ class RandomIoUCrop(nn.Module):
             # sample an option
             idx = int(torch.randint(low=0, high=len(self.options), size=(1,)))
             min_jaccard_overlap = self.options[idx]
-            if min_jaccard_overlap >= 1.0:  # a value larger than 1 encodes the leave as-is option
+            if (
+                min_jaccard_overlap >= 1.0
+            ):  # a value larger than 1 encodes the leave as-is option
                 return image, target
 
             for _ in range(self.trials):
@@ -131,14 +135,21 @@ class RandomIoUCrop(nn.Module):
                 # check for any valid boxes with centers within the crop area
                 cx = 0.5 * (target["boxes"][:, 0] + target["boxes"][:, 2])
                 cy = 0.5 * (target["boxes"][:, 1] + target["boxes"][:, 3])
-                is_within_crop_area = (left < cx) & (cx < right) & (top < cy) & (cy < bottom)
+                is_within_crop_area = (
+                    (left < cx) & (cx < right) & (top < cy) & (cy < bottom)
+                )
                 if not is_within_crop_area.any():
                     continue
 
                 # check at least 1 box with jaccard limitations
                 boxes = target["boxes"][is_within_crop_area]
                 ious = torchvision.ops.boxes.box_iou(
-                    boxes, torch.tensor([[left, top, right, bottom]], dtype=boxes.dtype, device=boxes.device)
+                    boxes,
+                    torch.tensor(
+                        [[left, top, right, bottom]],
+                        dtype=boxes.dtype,
+                        device=boxes.device,
+                    ),
                 )
                 if ious.max() < min_jaccard_overlap:
                     continue
@@ -157,7 +168,10 @@ class RandomIoUCrop(nn.Module):
 
 class RandomZoomOut(nn.Module):
     def __init__(
-        self, fill: Optional[List[float]] = None, side_range: Tuple[float, float] = (1.0, 4.0), p: float = 0.5
+        self,
+        fill: Optional[List[float]] = None,
+        side_range: Tuple[float, float] = (1.0, 4.0),
+        p: float = 0.5,
     ):
         super().__init__()
         if fill is None:
@@ -179,7 +193,9 @@ class RandomZoomOut(nn.Module):
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
         if isinstance(image, torch.Tensor):
             if image.ndimension() not in {2, 3}:
-                raise ValueError(f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
+                raise ValueError(
+                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions."
+                )
             elif image.ndimension() == 2:
                 image = image.unsqueeze(0)
 
@@ -188,7 +204,9 @@ class RandomZoomOut(nn.Module):
 
         _, orig_h, orig_w = F.get_dimensions(image)
 
-        r = self.side_range[0] + torch.rand(1) * (self.side_range[1] - self.side_range[0])
+        r = self.side_range[0] + torch.rand(1) * (
+            self.side_range[1] - self.side_range[0]
+        )
         canvas_width = int(orig_w * r)
         canvas_height = int(orig_h * r)
 
@@ -206,10 +224,12 @@ class RandomZoomOut(nn.Module):
         image = F.pad(image, [left, top, right, bottom], fill=fill)
         if isinstance(image, torch.Tensor):
             # PyTorch's pad supports only integers on fill. So we need to overwrite the colour
-            v = torch.tensor(self.fill, device=image.device, dtype=image.dtype).view(-1, 1, 1)
-            image[..., :top, :] = image[..., :, :left] = image[..., (top + orig_h) :, :] = image[
-                ..., :, (left + orig_w) :
-            ] = v
+            v = torch.tensor(self.fill, device=image.device, dtype=image.dtype).view(
+                -1, 1, 1
+            )
+            image[..., :top, :] = image[..., :, :left] = image[
+                ..., (top + orig_h) :, :
+            ] = image[..., :, (left + orig_w) :] = v
 
         if target is not None:
             target["boxes"][:, 0::2] += left
@@ -239,7 +259,9 @@ class RandomPhotometricDistort(nn.Module):
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
         if isinstance(image, torch.Tensor):
             if image.ndimension() not in {2, 3}:
-                raise ValueError(f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
+                raise ValueError(
+                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions."
+                )
             elif image.ndimension() == 2:
                 image = image.unsqueeze(0)
 
@@ -299,8 +321,14 @@ class ScaleJitter(nn.Module):
         antialias=True,
     ):
         super().__init__()
-        if not isinstance(target_size, tuple) or len(target_size) != 2 or not all(isinstance(x, int) for x in target_size):
-            raise TypeError("target_size must be a tuple of two integers (height, width).")
+        if (
+            not isinstance(target_size, tuple)
+            or len(target_size) != 2
+            or not all(isinstance(x, int) for x in target_size)
+        ):
+            raise TypeError(
+                "target_size must be a tuple of two integers (height, width)."
+            )
         self.target_size = target_size
         self.scale_range = scale_range
         self.interpolation = interpolation
@@ -311,18 +339,30 @@ class ScaleJitter(nn.Module):
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
         if isinstance(image, torch.Tensor):
             if image.ndimension() not in {2, 3}:
-                raise ValueError(f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
+                raise ValueError(
+                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions."
+                )
             elif image.ndimension() == 2:
                 image = image.unsqueeze(0)
 
         _, orig_height, orig_width = F.get_dimensions(image)
 
-        scale = self.scale_range[0] + torch.rand(1) * (self.scale_range[1] - self.scale_range[0])
-        r = min(self.target_size[1] / orig_height, self.target_size[0] / orig_width) * scale
+        scale = self.scale_range[0] + torch.rand(1) * (
+            self.scale_range[1] - self.scale_range[0]
+        )
+        r = (
+            min(self.target_size[1] / orig_height, self.target_size[0] / orig_width)
+            * scale
+        )
         new_width = int(orig_width * r)
         new_height = int(orig_height * r)
 
-        image = F.resize(image, [new_height, new_width], interpolation=self.interpolation, antialias=self.antialias)
+        image = F.resize(
+            image,
+            [new_height, new_width],
+            interpolation=self.interpolation,
+            antialias=self.antialias,
+        )
 
         if target is not None:
             target["boxes"][:, 0::2] *= new_width / orig_width
@@ -341,10 +381,16 @@ class ScaleJitter(nn.Module):
 class FixedSizeCrop(nn.Module):
     def __init__(self, size, fill=0, padding_mode="constant"):
         super().__init__()
-        size = tuple(T._setup_size(size, error_msg="Please provide only two dimensions (h, w) for size."))
+        size = tuple(
+            T._setup_size(
+                size, error_msg="Please provide only two dimensions (h, w) for size."
+            )
+        )
         self.crop_height = size[0]
         self.crop_width = size[1]
-        self.fill = fill  # TODO: Fill is currently respected only on PIL. Apply tensor patch.
+        self.fill = (
+            fill  # TODO: Fill is currently respected only on PIL. Apply tensor patch.
+        )
         self.padding_mode = padding_mode
 
     def _pad(self, img, target, padding):
@@ -386,7 +432,9 @@ class FixedSizeCrop(nn.Module):
             target["boxes"] = boxes[is_valid]
             target["labels"] = target["labels"][is_valid]
             if "masks" in target:
-                target["masks"] = F.crop(target["masks"][is_valid], top, left, height, width)
+                target["masks"] = F.crop(
+                    target["masks"][is_valid], top, left, height, width
+                )
 
         return img, target
 
@@ -434,19 +482,26 @@ class RandomShortestSize(nn.Module):
         _, orig_height, orig_width = F.get_dimensions(image)
 
         min_size = self.min_size[torch.randint(len(self.min_size), (1,)).item()]
-        r = min(min_size / min(orig_height, orig_width), self.max_size / max(orig_height, orig_width))
+        r = min(
+            min_size / min(orig_height, orig_width),
+            self.max_size / max(orig_height, orig_width),
+        )
 
         new_width = int(orig_width * r)
         new_height = int(orig_height * r)
 
-        image = F.resize(image, [new_height, new_width], interpolation=self.interpolation)
+        image = F.resize(
+            image, [new_height, new_width], interpolation=self.interpolation
+        )
 
         if target is not None:
             target["boxes"][:, 0::2] *= new_width / orig_width
             target["boxes"][:, 1::2] *= new_height / orig_height
             if "masks" in target:
                 target["masks"] = F.resize(
-                    target["masks"], [new_height, new_width], interpolation=InterpolationMode.NEAREST
+                    target["masks"],
+                    [new_height, new_width],
+                    interpolation=InterpolationMode.NEAREST,
                 )
 
         return image, target

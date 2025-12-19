@@ -12,7 +12,7 @@ import random
 
 if __name__ == "__main__":
     # train on the GPU or on the CPU, if a GPU is not available
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     # create directory for saving checkpoints if it doesn't exist
     os.makedirs("checkpoints", exist_ok=True)
 
@@ -21,12 +21,16 @@ if __name__ == "__main__":
 
     # our dataset has two classes only - background and object
     num_classes = 2
-    root = 'data/dataset'
+    root = "data/dataset"
     imgs = list(sorted(os.listdir(os.path.join(root, "images"))))
     masks = list(sorted(os.listdir(os.path.join(root, "targets"))))
     indices = list(range(len(imgs)))
-    train_indices = indices[:int(len(indices) * train_partition)]
-    val_indices = indices[int(len(indices) * train_partition):int(len(indices) * (train_partition + val_partition))]
+    train_indices = indices[: int(len(indices) * train_partition)]
+    val_indices = indices[
+        int(len(indices) * train_partition) : int(
+            len(indices) * (train_partition + val_partition)
+        )
+    ]
 
     # split the dataset in train and test set
     random.shuffle(train_indices)
@@ -36,27 +40,29 @@ if __name__ == "__main__":
     val_masks = [masks[i] for i in val_indices]
 
     # setup preprocessing and reading of images and targets
-    dataset_train = MultiObjectMaskDataset(train_transforms=True, imgs=train_imgs, \
-                                           image_dir='data/dataset/images', target_dir='data/dataset/targets', masks=train_masks)
-    dataset_val = MultiObjectMaskDataset(train_transforms=False, imgs=val_imgs, \
-                                         image_dir='data/dataset/images', target_dir='data/dataset/targets', masks=val_masks)
-
+    dataset_train = MultiObjectMaskDataset(
+        train_transforms=True,
+        imgs=train_imgs,
+        image_dir="data/dataset/images",
+        target_dir="data/dataset/targets",
+        masks=train_masks,
+    )
+    dataset_val = MultiObjectMaskDataset(
+        train_transforms=False,
+        imgs=val_imgs,
+        image_dir="data/dataset/images",
+        target_dir="data/dataset/targets",
+        masks=val_masks,
+    )
 
     # define training and validation data loaders
     data_loader = torch.utils.data.DataLoader(
-        dataset_train,
-        batch_size=4,
-        shuffle=True,
-        collate_fn=utils.collate_fn
+        dataset_train, batch_size=4, shuffle=True, collate_fn=utils.collate_fn
     )
 
     data_loader_val = torch.utils.data.DataLoader(
-        dataset_val,
-        batch_size=4,
-        shuffle=False,
-        collate_fn=utils.collate_fn
+        dataset_val, batch_size=4, shuffle=False, collate_fn=utils.collate_fn
     )
-
 
     # get the model using our helper function
     model = get_segmentation_model(num_classes)
@@ -66,19 +72,10 @@ if __name__ == "__main__":
 
     # construct an optimizer
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(
-        params,
-        lr=0.005,
-        momentum=0.9,
-        weight_decay=0.0005
-    )
+    optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
     # and a learning rate scheduler
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer,
-        step_size=3,
-        gamma=0.1
-    )
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
 
     # let's train it just for 2 epochs
     num_epochs = 2

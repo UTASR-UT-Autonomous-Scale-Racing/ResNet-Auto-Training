@@ -5,6 +5,7 @@ import os
 import sqlite3
 import shutil
 
+
 def process_recording(
     source_path: str,
     colour_min: np.ndarray,
@@ -46,7 +47,7 @@ def process_recording(
     if source_path.endswith(".mp4"):
         source = cv2.VideoCapture(source_path)
 
-        while (not num_frames or frame_count < num_frames):
+        while not num_frames or frame_count < num_frames:
             ret, frame = source.read()
             if not ret:
                 break
@@ -60,7 +61,7 @@ def process_recording(
             # Display debug information if enabled
             if debug:
                 combined_frame = np.vstack((processed_frame, mask))
-                cv2.imshow('DEBUG', combined_frame)
+                cv2.imshow("DEBUG", combined_frame)
                 cv2.waitKey(10)
 
             frame_count += 1
@@ -76,7 +77,7 @@ def process_recording(
         cursor.execute("SELECT * FROM state_vector_data ORDER BY id ASC")
 
         # Iterate over each row in the query result
-        while (not num_frames or frame_count < num_frames):
+        while not num_frames or frame_count < num_frames:
             row = cursor.fetchone()
             if not row:
                 break
@@ -96,7 +97,7 @@ def process_recording(
             if prompts == 1:
                 print("Exiting due to user input.")
                 break
-            
+
             prompts_list.append(np.asarray(prompts, dtype=np.int16))
 
             frame_count += 1
@@ -104,13 +105,17 @@ def process_recording(
         conn.close()
 
     else:
-        raise ValueError("Unsupported video source format. Please provide a .mp4 or .db file.")
+        raise ValueError(
+            "Unsupported video source format. Please provide a .mp4 or .db file."
+        )
     print(f"Processed {frame_count} frames.")
 
     # Clean up and save prompts
     cv2.destroyAllWindows()
     if prompts_list:
-        np.save(f"{prompts_dir}/prompts_per_frame.npy", np.array(prompts_list, dtype=object))
+        np.save(
+            f"{prompts_dir}/prompts_per_frame.npy", np.array(prompts_list, dtype=object)
+        )
     else:
         print("An error occurred, no prompts generated.")
 
@@ -125,6 +130,7 @@ def _enclose_polygons(mask: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: Modified mask with enclosed polygons.
     """
+
     def _fill(row: np.ndarray) -> None:
         indices = np.where(row == 255)[0]
         for i in range(0, len(indices) - 1, 2):
@@ -134,11 +140,9 @@ def _enclose_polygons(mask: np.ndarray) -> np.ndarray:
     _fill(mask[-1])
     return mask
 
+
 def process_frame(
-    frame: np.ndarray,
-    colour_min: np.ndarray,
-    colour_max: np.ndarray,
-    colorspace: str
+    frame: np.ndarray, colour_min: np.ndarray, colour_max: np.ndarray, colorspace: str
 ) -> Tuple[np.ndarray, np.ndarray, List[Tuple[int, int]]]:
     """
     Process a single frame to generate a mask and prompts.
@@ -162,9 +166,7 @@ def process_frame(
     mask = negative_region_of_interest(mask)
 
     # Create a binary mask based on color thresholds
-    colour_mask = cv2.inRange(
-        mask, colour_min, colour_max
-    )
+    colour_mask = cv2.inRange(mask, colour_min, colour_max)
     colour_mask = _enclose_polygons(colour_mask)
 
     # Find contours in the binary mask
@@ -172,7 +174,7 @@ def process_frame(
     frame = original_frame.copy()
     prompts = []
     valid_contours = []
-    threshold_area =  300  # Minimum area for valid contours
+    threshold_area = 300  # Minimum area for valid contours
 
     # Filter contours based on area and draw them on the frame
     for cnt in contours:
@@ -188,15 +190,18 @@ def process_frame(
     j = 2
 
     prompts_per_frame = []
-    for ring in range(0, num_rings+2):
+    for ring in range(0, num_rings + 2):
         if ring % j == 0:
             radius = (ring / num_rings) * max_radius
             for i in range(points_per_ring):
-                angle = (2 * np.pi / points_per_ring)* i + ring + 35
+                angle = (2 * np.pi / points_per_ring) * i + ring + 35
                 x = int(center_x + radius * np.cos(angle))
                 y = int(center_y + radius * np.sin(angle))
                 # Check if the point lies within any valid contour
-                if any(cv2.pointPolygonTest(cnt, (x, y - crop), False) >= 0 for cnt in valid_contours):
+                if any(
+                    cv2.pointPolygonTest(cnt, (x, y - crop), False) >= 0
+                    for cnt in valid_contours
+                ):
                     cv2.circle(frame, (x, y), 3, (0, 0, 255), -1)
                     prompts_per_frame.append([x, y])
                 else:
@@ -217,21 +222,22 @@ def process_frame(
     while True:
         mask = cv2.cvtColor(colour_mask, cv2.COLOR_GRAY2BGR)
         combined_frame = np.vstack((frame, mask))
-        cv2.imshow('DEBUG', combined_frame)
-        cv2.setMouseCallback('DEBUG', mouse_callback)
-        
+        cv2.imshow("DEBUG", combined_frame)
+        cv2.setMouseCallback("DEBUG", mouse_callback)
+
         key = cv2.waitKey(1) & 0xFF
-        if key == ord('p'):  # Proceed to the next frame
+        if key == ord("p"):  # Proceed to the next frame
             break
-        elif key == ord('l'):  # Clear prompts for the current frame
+        elif key == ord("l"):  # Clear prompts for the current frame
             prompts_per_frame = []
             break
-        elif key == ord('q'):  # Quit processing
+        elif key == ord("q"):  # Quit processing
             return 1
-    
+
     prompts.extend(prompts_per_frame)
 
     return prompts
+
 
 def negative_region_of_interest(frame: np.ndarray) -> np.ndarray:
     """
@@ -244,14 +250,15 @@ def negative_region_of_interest(frame: np.ndarray) -> np.ndarray:
         np.ndarray: Masked frame.
     """
     # Optionally, you can define a region of interest
-    #height, width = frame.shape[:2]
-    #trapezoid = np.array([
+    # height, width = frame.shape[:2]
+    # trapezoid = np.array([
     #    [(0, height), (width, height), (int(0.75 * width), height // 2), (int(0.25 * width), height // 2)]
-    #], dtype=np.int32)
+    # ], dtype=np.int32)
 
     mask = np.ones_like(frame[:, :, 0]) * 255
-    #cv2.fillPoly(mask, [trapezoid], 1)
+    # cv2.fillPoly(mask, [trapezoid], 1)
     return cv2.bitwise_and(frame, frame, mask=mask)
+
 
 def display_lines(frame: np.ndarray, lines: Optional[np.ndarray]) -> None:
     """
@@ -269,11 +276,12 @@ def display_lines(frame: np.ndarray, lines: Optional[np.ndarray]) -> None:
             x1, y1, x2, y2 = line.reshape(4) if line.ndim == 2 else line
             cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), thickness=10)
 
+
 if __name__ == "__main__":
     # Define input source path and output directory
     source_path = "data/recording.db"  # Path to the video or database file
     output_dir = "data/frames_and_prompts"
-    
+
     debug = True  # Enable debug mode
     colorspace_min = np.array([0, 0, 0], np.uint8)  # Minimum color threshold
     colorspace_max = np.array([33, 112, 123], np.uint8)  # Maximum color threshold
@@ -284,6 +292,12 @@ if __name__ == "__main__":
         shutil.rmtree(output_dir)
 
     # Process the recording
-    process_recording(source_path, colorspace_min, colorspace_max,
-                        colorspace="cv2.COLOR_BGR2XYZ", num_frames=num_frames,
-                        debug=debug, output_dir=output_dir)
+    process_recording(
+        source_path,
+        colorspace_min,
+        colorspace_max,
+        colorspace="cv2.COLOR_BGR2XYZ",
+        num_frames=num_frames,
+        debug=debug,
+        output_dir=output_dir,
+    )
