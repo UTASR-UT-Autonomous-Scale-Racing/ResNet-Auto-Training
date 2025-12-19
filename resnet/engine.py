@@ -9,7 +9,10 @@ import torch
 import utils
 from sklearn.metrics import jaccard_score
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, scaler=None):
+
+def train_one_epoch(
+    model, optimizer, data_loader, device, epoch, print_freq, scaler=None
+):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
@@ -26,7 +29,13 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, sc
 
     for images, targets in metric_logger.log_every(data_loader, print_freq, header):
         images = list(image.to(device) for image in images)
-        targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
+        targets = [
+            {
+                k: v.to(device) if isinstance(v, torch.Tensor) else v
+                for k, v in t.items()
+            }
+            for t in targets
+        ]
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             loss_dict = model(images, targets)
             losses = sum(loss for loss in loss_dict.values())
@@ -73,16 +82,24 @@ def evaluate(model, data_loader, device):
 
     for images, targets in metric_logger.log_every(data_loader, 100, header):
         images = list(img.to(device) for img in images)
-        targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
+        targets = [
+            {
+                k: v.to(device) if isinstance(v, torch.Tensor) else v
+                for k, v in t.items()
+            }
+            for t in targets
+        ]
 
         with torch.no_grad():
             predictions = model(images)
-        
+
         for target, prediction, image in zip(targets, predictions, images):
             true_masks = target["masks"].squeeze(1).cpu().numpy()
             pred_masks = (prediction["masks"] > 0.7).squeeze(1).cpu().numpy()
 
-            image = image.cpu().numpy().transpose(1, 2, 0)[:, :, ::-1]  # Convert RGB to BGR for OpenCV
+            image = (
+                image.cpu().numpy().transpose(1, 2, 0)[:, :, ::-1]
+            )  # Convert RGB to BGR for OpenCV
             overlay = image.copy()
             for pred_mask in pred_masks:
                 overlay[pred_mask > 0] = [0, 255, 0]  # Green overlay for predicted mask
