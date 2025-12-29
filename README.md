@@ -4,24 +4,32 @@ This project simplifies the process of data labeling by automating the creation 
 
 Note: uses the MobileNetV3-Large backbone.
 
-# Instructions
+# Installation
 
-1. `cd masking`
+Just run `install.sh`.
+
 1. **Install SAM2**
    `git clone https://github.com/facebookresearch/sam2.git`
    `cd sam2`
    `pip install -e .`
+
 1. **Download checkpoints**
    `mkdir -p checkpoints/`
    `cd checkpoints/`
    `wget https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt`
-1. **Create JPG folder**
+
+# Instructions
+
+1. **Generate frames and prompts**
    `python masking/generate_frames_and_prompts.py`
-1. **Run video masking**
+
+1. **Generates masks using SAM2**
    `python masking/generate_sam2_masks.py`
+
 1. **Train ResNet**
    `cd resnet/`
    `python resnet/train.py`
+
 1. **Run Inference**
    `python resnet/inference.py`
 
