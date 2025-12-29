@@ -15,38 +15,43 @@ This work uses the Sam2 model as described in:
 
 import os
 import shutil
+import sys
+
+import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 from PIL import Image
-import cv2
-import sys
-import torch
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../sam2"))
-from sam2.build_sam import build_sam2_video_predictor
-from sam2.build_sam import build_sam2
+from sam2.build_sam import build_sam2, build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 checkpoint = os.path.join(
-    os.path.dirname(__file__), "../sam2/checkpoints/sam2.1_hiera_large.pt"
+    os.path.dirname(__file__),
+    os.path.join("sam2", "checkpoints", "sam2.1_hiera_large.pt"),
 )
 model_cfg = (
-    "configs/sam2.1/sam2.1_hiera_l.yaml"  # This should be relative to the sam2 package
+    os.path.join("configs", "sam2.1", "sam2.1_hiera_l.yaml")
+    # This should be relative to the sam2 package
 )
 
-prompts_source_path = "data/frames_and_prompts0/prompts/prompts_per_frame.npy"
-frames_source_dir = "data/frames_and_prompts0/frames"
+prompts_source_path = os.path.join(
+    "data", "frames_and_prompts", "prompts", "prompts_per_frame.npy"
+)
+frames_source_dir = os.path.join("data", "frames_and_prompts", "frames")
 
-masks_output_dir = "data/dataset/targets"
-frames_output_dir = "data/dataset/images"
+masks_output_dir = os.path.join("data", "dataset", "targets")
+frames_output_dir = os.path.join("data", "dataset", "images")
 
 
 def build_predictor():
     print("Building predictor...")
-    # Select device
+    # Select torch device
     if torch.cuda.is_available():
         device = torch.device("cuda")
+    # elif torch.backends.mps.is_available():
+    # device = torch.device("mps")
     else:
         device = torch.device("cpu")
     print(f"Using device: {device}")

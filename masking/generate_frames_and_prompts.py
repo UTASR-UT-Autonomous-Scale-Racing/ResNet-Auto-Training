@@ -1,9 +1,15 @@
+import os
+import shutil
+import sqlite3
+from typing import List, Optional, Tuple
+
 import cv2
 import numpy as np
-from typing import Tuple, List, Optional
-import os
-import sqlite3
-import shutil
+
+
+# for exiting cv2
+class QuitException(Exception):
+    pass
 
 
 def process_recording(
@@ -38,13 +44,44 @@ def process_recording(
     prompts_list = []
 
     # Create directories for saving frames and prompts
-    frames_dir = f"{output_dir}/frames"
+    frames_dir = os.path.join(output_dir, "frames")
     os.makedirs(frames_dir, exist_ok=True)
-    prompts_dir = f"{output_dir}/prompts"
+    prompts_dir = os.path.join(output_dir, "prompts")
     os.makedirs(prompts_dir, exist_ok=True)
 
     # Process video file
-    if source_path.endswith(".mp4"):
+    if os.path.isdir(source_path):
+        image_files = sorted(
+            [
+                file
+                for file in os.listdir(source_path)
+                if file.lower().endswith((".jpg", ".jpeg", ".png"))
+            ]
+        )
+        if num_frames:
+            image_files = image_files[:num_frames]
+
+        for img_name in image_files:
+            frame = cv2.imread(os.path.join(source_path, img_name))
+
+            if frame is None:
+                continue
+
+            processed_frame, mask, prompts = process_frame(
+                frame, colour_min, colour_max, colorspace
+            )
+            prompts_list.append(prompts)
+
+            frame_filename = os.path.join(frames_dir, img_name)
+            cv2.imwrite(frame_filename, frame)
+
+            if debug:
+                cv2.imshow("DEBUG", processed_frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+
+            frame_count += 1
+    elif source_path.endswith(".mp4"):
         source = cv2.VideoCapture(source_path)
 
         while not num_frames or frame_count < num_frames:
@@ -93,7 +130,9 @@ def process_recording(
             cv2.imwrite(frame_filename, rgb_frame)
 
             # Process the frame to generate prompts
-            prompts = process_frame(rgb_frame, colour_min, colour_max, colorspace)
+            processed_frame, mask, prompts = process_frame(
+                rgb_frame, colour_min, colour_max, colorspace
+            )
             if prompts == 1:
                 print("Exiting due to user input.")
                 break
@@ -114,7 +153,8 @@ def process_recording(
     cv2.destroyAllWindows()
     if prompts_list:
         np.save(
-            f"{prompts_dir}/prompts_per_frame.npy", np.array(prompts_list, dtype=object)
+            os.path.join(prompts_dir, "prompts_per_frame.npy"),
+            np.array(prompts_list, dtype=object),
         )
     else:
         print("An error occurred, no prompts generated.")
@@ -232,11 +272,11 @@ def process_frame(
             prompts_per_frame = []
             break
         elif key == ord("q"):  # Quit processing
-            return 1
+            raise QuitException
 
     prompts.extend(prompts_per_frame)
 
-    return prompts
+    return frame, colour_mask, prompts
 
 
 def negative_region_of_interest(frame: np.ndarray) -> np.ndarray:
@@ -279,8 +319,8 @@ def display_lines(frame: np.ndarray, lines: Optional[np.ndarray]) -> None:
 
 if __name__ == "__main__":
     # Define input source path and output directory
-    source_path = "data/recording.db"  # Path to the video or database file
-    output_dir = "data/frames_and_prompts"
+    source_path = os.path.join("data", "dataset", "images")
+    output_dir = os.path.join("data", "frames_and_prompts")
 
     debug = True  # Enable debug mode
     colorspace_min = np.array([0, 0, 0], np.uint8)  # Minimum color threshold

@@ -2,17 +2,22 @@
 Improvised from: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 """
 
-import torch
-
-import utils
-from engine import train_one_epoch, evaluate
-from helpers import get_segmentation_model, MultiObjectMaskDataset
 import os
 import random
 
+import torch
+import utils
+from helpers import MultiObjectMaskDataset, get_segmentation_model
+
 if __name__ == "__main__":
-    # train on the GPU or on the CPU, if a GPU is not available
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    # select torch device
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    # elif torch.backends.mps.is_available():
+    # device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+
     # create directory for saving checkpoints if it doesn't exist
     os.makedirs("checkpoints", exist_ok=True)
 
@@ -43,15 +48,15 @@ if __name__ == "__main__":
     dataset_train = MultiObjectMaskDataset(
         train_transforms=True,
         imgs=train_imgs,
-        image_dir="data/dataset/images",
-        target_dir="data/dataset/targets",
+        image_dir=os.path.join("data", "dataset", "images"),
+        target_dir=os.path.join("data", "dataset", "targets"),
         masks=train_masks,
     )
     dataset_val = MultiObjectMaskDataset(
         train_transforms=False,
         imgs=val_imgs,
-        image_dir="data/dataset/images",
-        target_dir="data/dataset/targets",
+        image_dir=os.path.join("data", "dataset", "images"),
+        target_dir=os.path.join("data", "dataset", "targets"),
         masks=val_masks,
     )
 
@@ -70,26 +75,26 @@ if __name__ == "__main__":
     # move model to the right device
     model.to(device)
 
-    # construct an optimizer
-    params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+    optimizer = torch.optim.SGD(
+        model.parameters(), lr=0.005, momentum=0.9, weight_decay=0.0005
+    )
 
-    # and a learning rate scheduler
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
-
-    # let's train it just for 2 epochs
     num_epochs = 2
 
     for epoch in range(num_epochs):
-        # train for one epoch, printing every 10 iterations
-        train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq=10)
-        torch.save(model.state_dict(), f"checkpoints/mask_rcnn_model_{epoch}.pth")
-        print(f"Model saved for epoch {epoch}")
-        # update the learning rate
-        lr_scheduler.step()
-        # evaluate on the test dataset
-        mean_iou = evaluate(model, data_loader_val, device=device)
-        print(f"Mean IoU: {mean_iou}")
+        model.train()
+        for images, targets in data_loader:
+            images = [img.to(device) for img in images]
+            masks = [mask.to(device) for mask in targets]
+            images = torch.stack(images)
+            masks = torch.stack(masks)
 
-    torch.save(model.state_dict(), f"checkpoints/mask_rcnn_model.pth")
-    print("Model saved")
+            outputs = model(images)["out"]
+            loss = criterion(outputs, masks)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        print(f"Epoch {epoch}")
