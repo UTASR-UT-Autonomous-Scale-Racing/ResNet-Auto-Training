@@ -1,12 +1,9 @@
+# temp folders
 data/
 checkpoints/
 sam2/
 
-# Default VSCode
-.vscode/
-*.code-workspace
-
-# Python
+# python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -32,3 +29,6 @@ htmlcov/
 venv/
 ENV/
 env/
+
+# the usual
+.DS_Store

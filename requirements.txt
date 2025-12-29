@@ -1,7 +1,8 @@
 numpy
+onnx
+onnxruntime
 opencv-python
 pillow
-pycocotools
 scikit-learn
-torch
-torchvision
+torch>=2.5.1
+torchvision>=0.20.1
