@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     # our dataset has two classes only - background and object
     num_classes = 2
-    root = "data/dataset"
+    root = os.path.join("data", "dataset")
     imgs = list(sorted(os.listdir(os.path.join(root, "images"))))
     masks = list(sorted(os.listdir(os.path.join(root, "targets"))))
     indices = list(range(len(imgs)))
@@ -96,5 +96,4 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
         print(f"Epoch {epoch}")

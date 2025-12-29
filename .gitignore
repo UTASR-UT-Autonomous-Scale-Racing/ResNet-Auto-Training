@@ -4,6 +4,7 @@ checkpoints/
 sam2/
 
 # python
+.python-version
 __pycache__/
 *.py[cod]
 *.pyo
