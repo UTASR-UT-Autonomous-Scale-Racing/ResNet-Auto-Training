@@ -77,9 +77,8 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
             return img, {}
 
         mask_path = os.path.join(self.target_dir, self.masks[img_idx])
-        # mask = Image.open(mask_path).convert("L")
         semantic_mask = read_image(mask_path)[0].long()
-        # target = {"mask": mask}
+        semantic_mask[semantic_mask == 255] = 1  # map 255 to 1
 
         # transforms
         img, semantic_mask = self.transforms[transform_type](img, semantic_mask)

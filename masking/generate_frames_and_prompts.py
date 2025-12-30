@@ -17,11 +17,11 @@ def process_recording(
     colour_min: np.ndarray,
     colour_max: np.ndarray,
     colorspace: str,
+    output_dir: str,
     width: int = 640,
     height: int = 400,
     debug: bool = False,
     num_frames: Optional[int] = None,
-    output_dir: str = "output_dir",
 ) -> None:
     """
     Process a video or database recording to extract frames and generate prompts.

@@ -26,15 +26,16 @@ Just run `install.sh`.
 1. **Generates masks using SAM2**
    `python masking/generate_sam2_masks.py`
 
-1. **Train ResNet**
-   `cd resnet/`
+1. **Training**
    `python resnet/train.py`
 
-1. **Run Inference**
+1. **Inference**
    `python resnet/inference.py`
 
 **Summary of Outputs:**
 
-- `data/frames_and_prompts`: Contains extracted JPG images from the video and prompts for each frame.
-- `data/sam2_masked_frames`: Contains masked images with pixel values of 0 and 1.
-- `checkpoints/semantic_segmentation_deeplabv3.onnx`: Contains the trained Deeplabv3 model.
+- `data/frames_and_prompts`: Contains extracted JPG images from the video and prompts for each frame 
+- `data/sam2_masked_frames`: Contains masked images with pixel values of 0 and 1
+- `checkpoints/deeplabv3_epoch_N.pth`: The trained model at epoch N
+- `checkpoints/deeplabv3_final.pth`: The final trained model
+- `checkpoints/deeplabv3_final_onnx.onnx`: The final trained model in ONNX format
