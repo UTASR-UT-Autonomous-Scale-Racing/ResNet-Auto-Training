@@ -7,10 +7,16 @@ import os
 from PIL import Image
 import torch
 import transforms as my_transforms
-from torchvision import tv_tensors
 from torchvision.io import read_image
 from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
 from torchvision.transforms import v2 as T
+
+
+DATA_ROOT = os.path.join("data", "dataset")
+DATA_IMAGES = os.path.join(DATA_ROOT, "images")
+DATA_TARGETS = os.path.join(DATA_ROOT, "targets")
+NUM_CLASSES = 2
+OUTPUT_ROOT = "checkpoints"
 
 base_transforms = [
     [],  # Includes no transforms for inference and training
@@ -85,7 +91,7 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
 
 
 def get_segmentation_model(num_classes):
-    # build the Deeplabv3 model with MobileNetV3-Large backbone
+    """Build the Deeplabv3 model with MobileNetV3-Large backbone"""
     model = deeplabv3_mobilenet_v3_large(weights=None, num_classes=num_classes)
     return model
 
@@ -96,3 +102,16 @@ def get_transform(train, transform_type=0):
         transforms.extend(available_transforms[transform_type])
     transforms.append(T.ToTensor())
     return T.Compose(transforms)
+
+
+def get_device():
+    """Returns the most appropriate device for torch
+
+    Note: mps is dubious don't use or face hair loss
+    """
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    # elif torch.backends.mps.is_available():
+    # return torch.device("mps")
+    else:
+        return torch.device("cpu")
