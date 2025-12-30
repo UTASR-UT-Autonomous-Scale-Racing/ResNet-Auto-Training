@@ -1,5 +1,5 @@
 """
-Improvised from: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
+Reference: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 """
 
 import os
@@ -7,33 +7,39 @@ import random
 
 import torch
 import utils
-from helpers import MultiObjectMaskDataset, get_segmentation_model
+from helpers import (
+    DATA_IMAGES,
+    DATA_TARGETS,
+    NUM_CLASSES,
+    OUTPUT_ROOT,
+    MultiObjectMaskDataset,
+    get_device,
+    get_segmentation_model,
+)
+
+
+TRAIN_PARTITION = 0.7
+VAL_PARTITION = 0.2
+TRAIN_LR = 5e-3
+TRAIN_MOMENTUM = 9e-1
+TRAIN_WEIGHT_DECAY = 5e-4
+
 
 if __name__ == "__main__":
-    # select torch device
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    # elif torch.backends.mps.is_available():
-    # device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    # get torch device
+    device = get_device()
 
     # create directory for saving checkpoints if it doesn't exist
-    os.makedirs("checkpoints", exist_ok=True)
-
-    train_partition = 0.7
-    val_partition = 0.2
+    os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
     # our dataset has two classes only - background and object
-    num_classes = 2
-    root = os.path.join("data", "dataset")
-    imgs = list(sorted(os.listdir(os.path.join(root, "images"))))
-    masks = list(sorted(os.listdir(os.path.join(root, "targets"))))
+    imgs = list(sorted(os.listdir(DATA_IMAGES)))
+    masks = list(sorted(os.listdir(DATA_TARGETS)))
     indices = list(range(len(imgs)))
-    train_indices = indices[: int(len(indices) * train_partition)]
+    train_indices = indices[: int(len(indices) * TRAIN_PARTITION)]
     val_indices = indices[
-        int(len(indices) * train_partition) : int(
-            len(indices) * (train_partition + val_partition)
+        int(len(indices) * TRAIN_PARTITION) : int(
+            len(indices) * (TRAIN_PARTITION + VAL_PARTITION)
         )
     ]
 
@@ -48,15 +54,15 @@ if __name__ == "__main__":
     dataset_train = MultiObjectMaskDataset(
         train_transforms=True,
         imgs=train_imgs,
-        image_dir=os.path.join("data", "dataset", "images"),
-        target_dir=os.path.join("data", "dataset", "targets"),
+        image_dir=DATA_IMAGES,
+        target_dir=DATA_TARGETS,
         masks=train_masks,
     )
     dataset_val = MultiObjectMaskDataset(
         train_transforms=False,
         imgs=val_imgs,
-        image_dir=os.path.join("data", "dataset", "images"),
-        target_dir=os.path.join("data", "dataset", "targets"),
+        image_dir=DATA_IMAGES,
+        target_dir=DATA_TARGETS,
         masks=val_masks,
     )
 
@@ -70,20 +76,24 @@ if __name__ == "__main__":
     )
 
     # get the model using our helper function
-    model = get_segmentation_model(num_classes)
+    model = get_segmentation_model(NUM_CLASSES)
 
-    # move model to the right device
+    # move model to device
     model.to(device)
 
     criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
     optimizer = torch.optim.SGD(
-        model.parameters(), lr=0.005, momentum=0.9, weight_decay=0.0005
+        model.parameters(),
+        lr=TRAIN_LR,
+        momentum=TRAIN_MOMENTUM,
+        weight_decay=TRAIN_WEIGHT_DECAY,
     )
 
     num_epochs = 2
 
     for epoch in range(num_epochs):
         model.train()
+
         for images, targets in data_loader:
             images = [img.to(device) for img in images]
             masks = [mask.to(device) for mask in targets]
@@ -96,4 +106,11 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+        torch.save(
+            model.state_dict(),
+            os.path.join(OUTPUT_ROOT, f"deeplabv3_epoch_{epoch}.pth"),
+        )
         print(f"Epoch {epoch}")
+
+    torch.save(model.state_dict(), os.path.join(OUTPUT_ROOT, "deeplabv3_final.pth"))
