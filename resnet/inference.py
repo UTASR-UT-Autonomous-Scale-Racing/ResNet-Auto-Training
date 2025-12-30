@@ -5,6 +5,7 @@ Reference: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 import os
 
 import cv2
+import numpy as np
 import onnxruntime as ort
 import torch
 import torch.onnx
@@ -40,8 +41,8 @@ def export_to_onnx(
         input_names=["input"],
         output_names=["output"],
         dynamic_axes={
-            "input": {0: "batch_size"},
-            "output": {0: "batch_size"},
+            "input": {0: "batch_size", 2: "height", 3: "width"},
+            "output": {0: "batch_size", 2: "height", 3: "width"},
         },
         opset_version=12,
         do_constant_folding=True,
@@ -60,32 +61,40 @@ def inference_real_time_test_onnx(onnx_path, imgs):
         onnx_path, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
     )
 
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+
     for img_path in imgs:
-        image_raw = cv2.imread(img_path)
-        image = cv2.cvtColor(image_raw, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
-        image = transform(image)  # Apply the same transformations as during training
-        x = (
-            image.unsqueeze(0).numpy().astype("float32")
-        )  # ONNX Runtime requires CPU numpy array
+        img_raw = cv2.imread(img_path)
+
+        if img_raw is None:
+            print(f"Skipped {img_path} cuz it empty")
+            continue
+
+        img_rgb = cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
+        img = transform(img_rgb)  # Apply the same transformations as during training
+        x = img.unsqueeze(0).numpy().astype(np.float32)  # ONNX requires CPU numpy array
 
         # Run inference
         ort_inputs = {ort_session.get_inputs()[0].name: x}
         ort_outputs = ort_session.run(None, ort_inputs)
 
-        logits = torch.tensor(ort_outputs[0])
+        logits = torch.from_numpy(ort_outputs[0])
         pred = logits.argmax(dim=1).squeeze(0).numpy()
 
-        overlay = image.numpy().transpose(1, 2, 0)[:, :, ::-1].copy()
-        overlay[pred == 1] = [0, 255, 0]
-        blended = cv2.addWeighted(
-            overlay.astype("uint8"),
-            0.6,
-            image.numpy().transpose(1, 2, 0)[:, :, ::-1].astype("uint8"),
-            0.4,
-            0,
-        )
+        vis = img * std + mean
+        vis = vis.clamp(0, 1)
+        vis = (vis * 255).byte().numpy()
+        vis = vis.transpose(1, 2, 0)[:, :, ::-1]
+
+        overlay = vis.copy()
+        overlay[pred == 1] = [0, 255, 0]  # greeeeeeeeeeeen
+
+        blended = cv2.addWeighted(overlay, 0.6, vis, 0.4, 0)
+
         cv2.imshow("Semantic Segmentation", blended)
-        cv2.waitKey(1)
+        if cv2.waitKey(1) & 0xFF == 27:  # esc
+            break
     cv2.destroyAllWindows()
 
 

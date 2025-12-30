@@ -18,11 +18,12 @@ from helpers import (
 )
 
 
+NUM_EPOCHS = 2
 TRAIN_PARTITION = 0.7
-VAL_PARTITION = 0.2
 TRAIN_LR = 5e-3
 TRAIN_MOMENTUM = 9e-1
 TRAIN_WEIGHT_DECAY = 5e-4
+VAL_PARTITION = 0.2
 
 
 if __name__ == "__main__":
@@ -68,11 +69,21 @@ if __name__ == "__main__":
 
     # define training and validation data loaders
     data_loader = torch.utils.data.DataLoader(
-        dataset_train, batch_size=4, shuffle=True, collate_fn=utils.collate_fn
+        dataset_train,
+        batch_size=8,
+        shuffle=True,
+        collate_fn=utils.collate_fn,
+        num_workers=12,
+        pin_memory=True,
     )
 
     data_loader_val = torch.utils.data.DataLoader(
-        dataset_val, batch_size=4, shuffle=False, collate_fn=utils.collate_fn
+        dataset_val,
+        batch_size=8,
+        shuffle=False,
+        collate_fn=utils.collate_fn,
+        num_workers=12,
+        pin_memory=True,
     )
 
     # get the model using our helper function
@@ -81,7 +92,7 @@ if __name__ == "__main__":
     # move model to device
     model.to(device)
 
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=255)
+    criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=TRAIN_LR,
@@ -89,9 +100,7 @@ if __name__ == "__main__":
         weight_decay=TRAIN_WEIGHT_DECAY,
     )
 
-    num_epochs = 2
-
-    for epoch in range(num_epochs):
+    for epoch in range(NUM_EPOCHS):
         model.train()
 
         for images, targets in data_loader:
