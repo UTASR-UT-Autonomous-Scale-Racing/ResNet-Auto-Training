@@ -99,7 +99,9 @@ def get_transform(train, transform_type=0):
     transforms = []
     if train:
         transforms.extend(available_transforms[transform_type])
-    transforms.append(T.ToTensor())
+    transforms.extend(
+        [T.ToImage(), T.ToDtype(torch.float32, scale=True)]
+    )  # equivalent to ToTensor()
     return T.Compose(transforms)
 
 
