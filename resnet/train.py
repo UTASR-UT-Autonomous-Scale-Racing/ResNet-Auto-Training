@@ -6,6 +6,7 @@ import os
 import random
 
 import torch
+from tqdm import tqdm
 import utils
 from helpers import (
     DATA_IMAGES,
@@ -24,6 +25,8 @@ TRAIN_LR = 5e-3
 TRAIN_MOMENTUM = 9e-1
 TRAIN_WEIGHT_DECAY = 5e-4
 VAL_PARTITION = 0.2
+
+NUM_WORKERS = 4
 
 
 if __name__ == "__main__":
@@ -73,7 +76,7 @@ if __name__ == "__main__":
         batch_size=8,
         shuffle=True,
         collate_fn=utils.collate_fn,
-        num_workers=12,
+        num_workers=NUM_WORKERS,
         pin_memory=True,
     )
 
@@ -82,7 +85,7 @@ if __name__ == "__main__":
         batch_size=8,
         shuffle=False,
         collate_fn=utils.collate_fn,
-        num_workers=12,
+        num_workers=NUM_WORKERS,
         pin_memory=True,
     )
 
@@ -100,10 +103,12 @@ if __name__ == "__main__":
         weight_decay=TRAIN_WEIGHT_DECAY,
     )
 
+    print(f"Training on {device.type}")
+
     for epoch in range(NUM_EPOCHS):
         model.train()
 
-        for images, targets in data_loader:
+        for images, targets in tqdm(data_loader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}"):
             images = [img.to(device) for img in images]
             masks = [mask.to(device) for mask in targets]
             images = torch.stack(images)
@@ -120,6 +125,5 @@ if __name__ == "__main__":
             model.state_dict(),
             os.path.join(OUTPUT_ROOT, f"deeplabv3_epoch_{epoch}.pth"),
         )
-        print(f"Epoch {epoch}")
 
     torch.save(model.state_dict(), os.path.join(OUTPUT_ROOT, "deeplabv3_final.pth"))

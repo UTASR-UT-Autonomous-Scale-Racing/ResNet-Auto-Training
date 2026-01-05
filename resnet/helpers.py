@@ -40,7 +40,8 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
     inference: bool
     transforms: list
     dilate_mask: bool  # to dilate, or not to dilate: that is the question
-    dilate_kernel_dimension: Optional[int]
+    dilate_kernel_dimension: int
+    dilate_iterations: int
     _original_len: int
     len: int
 
@@ -54,6 +55,7 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         train_transforms=False,
         dilate_mask=True,
         dilate_kernel_dimension=5,
+        dilate_iterations=1,
     ) -> None:
         self.inference = inference
         if not inference:
@@ -67,6 +69,7 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         self.masks = masks
         self.dilate_mask = dilate_mask
         self.dilate_kernel_dimension = dilate_kernel_dimension
+        self.dilate_iterations = dilate_iterations
         self._original_len = len(self.imgs)
 
         if train_transforms:
@@ -106,9 +109,9 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         if self.dilate_mask:
             assert self.dilate_kernel_dimension is not None
             kernel = np.ones(
-                (1, 1, self.dilate_kernel_dimension, self.dilate_kernel_dimension),
+                (self.dilate_kernel_dimension, self.dilate_kernel_dimension),
             )
-            mask = cv2.dilate(mask, kernel, iterations=1)
+            mask = cv2.dilate(mask, kernel, iterations=self.dilate_iterations)
 
         semantic_mask = torch.from_numpy(mask).long()
 
@@ -132,7 +135,11 @@ def get_transform(train, transform_type=0) -> T.Compose:
     if train:
         transforms.extend(available_transforms[transform_type])
     transforms.extend(
-        [T.ToImage(), T.ToDtype(torch.float32, scale=True)]
+        [
+            T.ToImage(),
+            T.ToDtype(torch.float32, scale=True),
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
     )  # equivalent to ToTensor()
     return T.Compose(transforms)
 
