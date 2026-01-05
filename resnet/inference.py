@@ -15,17 +15,21 @@ from helpers import (
     OUTPUT_ROOT,
     get_device,
     get_segmentation_model,
-    get_transform,
 )
 
 ONNX_NAME = "deeplabv3_final_onnx"
+PROVIDERS = [
+    # "TensorrtExecutionProvider",  # use only when on jetson
+    "NvTensorRtRtxExecutionProvider",  # use only when on desktop
+    "CUDAExecutionProvider",
+]
 
 
 def export_to_onnx(
     model,
     input_shape=(3, 400, 640),
     onnx_path=os.path.join(OUTPUT_ROOT, f"{ONNX_NAME}.onnx"),
-):
+) -> None:
     """Export PyTorch model to ONNX format"""
     model.eval()
     model.to("cpu")
@@ -36,7 +40,7 @@ def export_to_onnx(
     # Export to ONNX
     torch.onnx.export(
         model,
-        dummy_input,
+        (dummy_input,),
         onnx_path,
         input_names=["input"],
         output_names=["output"],
@@ -51,41 +55,35 @@ def export_to_onnx(
     print(f"Model exported to {onnx_path}")
 
 
-def inference_real_time_test_onnx(onnx_path, imgs):
+def inference_real_time_test_onnx(onnx_path, providers, imgs) -> None:
     """Inference using ONNX model"""
+
     print("ONNX Inference")
-    transform = get_transform(train=False)
 
     # Load ONNX model
-    ort_session = ort.InferenceSession(
-        onnx_path, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
-    )
+    ort_session = ort.InferenceSession(onnx_path, providers=providers)
 
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
     for img_path in imgs:
         img_raw = cv2.imread(img_path)
-
         if img_raw is None:
-            print(f"Skipped {img_path} cuz it empty")
             continue
 
-        img_rgb = cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
-        img = transform(img_rgb)  # Apply the same transformations as during training
-        x = img.unsqueeze(0).numpy().astype(np.float32)  # ONNX requires CPU numpy array
+        img_rgb = torch.from_numpy(img_raw[:, :, ::-1]).permute(2, 0, 1).float() / 255.0
+        img_tensor = ((img_rgb.to(device) - mean) / std).unsqueeze(0)
+        x = img_tensor.half().contiguous().cpu().numpy()
 
         # Run inference
         ort_inputs = {ort_session.get_inputs()[0].name: x}
         ort_outputs = ort_session.run(None, ort_inputs)
 
-        logits = torch.from_numpy(ort_outputs[0])
-        pred = logits.argmax(dim=1).squeeze(0).numpy()
+        pred = np.argmax(ort_outputs[0][0], axis=0)
 
-        vis = img * std + mean
-        vis = vis.clamp(0, 1)
-        vis = (vis * 255).byte().numpy()
-        vis = vis.transpose(1, 2, 0)[:, :, ::-1]
+        # visualization
+        vis = (img_tensor[0] * std + mean).clamp(0, 1).cpu().numpy()
+        vis = (vis * 255).astype(np.uint8).transpose(1, 2, 0)[:, :, ::-1]
 
         overlay = vis.copy()
         overlay[pred == 1] = [0, 255, 0]  # greeeeeeeeeeeen
@@ -95,6 +93,7 @@ def inference_real_time_test_onnx(onnx_path, imgs):
         cv2.imshow("Semantic Segmentation", blended)
         if cv2.waitKey(1) & 0xFF == 27:  # esc
             break
+
     cv2.destroyAllWindows()
 
 
@@ -118,4 +117,4 @@ if __name__ == "__main__":
         export_to_onnx(model, onnx_path=onnx_path)
 
     # Use ONNX inference
-    inference_real_time_test_onnx(onnx_path, test_imgs)
+    inference_real_time_test_onnx(onnx_path, PROVIDERS, test_imgs)
