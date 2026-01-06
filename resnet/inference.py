@@ -22,7 +22,7 @@ PROVIDERS = [
 
 def export_to_onnx(
     model,
-    input_shape=(3, 400, 640),
+    input_shape=(3, 360, 640),
     onnx_path=os.path.join(OUTPUT_ROOT, f"{ONNX_NAME}.onnx"),
 ) -> None:
     """Export PyTorch model to ONNX format"""

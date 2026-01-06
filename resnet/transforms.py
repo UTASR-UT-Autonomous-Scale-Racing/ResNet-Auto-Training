@@ -70,7 +70,7 @@ class Compose:
         return image, mask
 
 
-def get_transform(train: bool, crop_size: Tuple[int, int] = (400, 640)):
+def get_transform(train: bool, crop_size: Tuple[int, int] = (360, 640)):
     """
     Returns a transform pipeline for semantic segmentation.
 
