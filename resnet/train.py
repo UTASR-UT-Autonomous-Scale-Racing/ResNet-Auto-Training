@@ -1,21 +1,16 @@
-"""
-Reference: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
-"""
-
 import os
 import random
-
 import torch
 from tqdm import tqdm
 import utils
 from helpers import (
-    DATA_IMAGES,
-    DATA_TARGETS,
-    NUM_CLASSES,
-    OUTPUT_ROOT,
     MultiObjectMaskDataset,
     get_device,
     get_segmentation_model,
+    DATA_IMAGES,
+    DATA_TARGETS,
+    OUTPUT_ROOT,
+    NUM_CLASSES,
 )
 
 
@@ -25,7 +20,7 @@ TRAIN_LR = 5e-3
 TRAIN_MOMENTUM = 9e-1
 TRAIN_WEIGHT_DECAY = 5e-4
 VAL_PARTITION = 0.2
-
+BATCH_SIZE = 8
 NUM_WORKERS = 4
 
 
@@ -73,20 +68,22 @@ if __name__ == "__main__":
     # define training and validation data loaders
     data_loader = torch.utils.data.DataLoader(
         dataset_train,
-        batch_size=8,
+        batch_size=BATCH_SIZE,
         shuffle=True,
         collate_fn=utils.collate_fn,
         num_workers=NUM_WORKERS,
         pin_memory=True,
+        persistent_workers=True,
     )
 
     data_loader_val = torch.utils.data.DataLoader(
         dataset_val,
-        batch_size=8,
+        batch_size=BATCH_SIZE,
         shuffle=False,
         collate_fn=utils.collate_fn,
         num_workers=NUM_WORKERS,
         pin_memory=True,
+        persistent_workers=True,
     )
 
     # get the model using our helper function
@@ -109,10 +106,10 @@ if __name__ == "__main__":
         model.train()
 
         for images, targets in tqdm(data_loader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}"):
-            images = [img.to(device) for img in images]
-            masks = [mask.to(device) for mask in targets]
-            images = torch.stack(images)
-            masks = torch.stack(masks)
+            images = torch.stack([img.to(device, non_blocking=True) for img in images])
+            masks = torch.stack(
+                [mask.to(device, non_blocking=True) for mask in targets]
+            )
 
             outputs = model(images)["out"]
             loss = criterion(outputs, masks)
@@ -122,7 +119,11 @@ if __name__ == "__main__":
             optimizer.step()
 
         torch.save(
-            model.state_dict(),
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+            },
             os.path.join(OUTPUT_ROOT, f"deeplabv3_epoch_{epoch}.pth"),
         )
 

@@ -1,12 +1,7 @@
-"""
-Reference: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
-"""
-
-import os
-
 import cv2
 import numpy as np
 import onnxruntime as ort
+import os
 import torch
 import torch.onnx
 from helpers import (
@@ -118,6 +113,4 @@ if __name__ == "__main__":
         export_to_onnx(model, onnx_path=onnx_path)
 
     # Use ONNX inference
-    inference_real_time_test_onnx(
-        onnx_path, PROVIDERS, test_imgs, device=torch.device("cpu")
-    )
+    inference_real_time_test_onnx(onnx_path, PROVIDERS, test_imgs, device=get_device())
