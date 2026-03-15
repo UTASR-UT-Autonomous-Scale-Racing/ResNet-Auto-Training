@@ -1,9 +1,13 @@
 import random
 import torch
+from torch import nn, Tensor
+import torchvision
 from torchvision.transforms import functional as TF
 from torchvision.transforms import v2 as T
+from torchvision import tv_tensors
 from typing import Tuple
-
+import cv2 as cv
+from numpy.typing import NDArray
 
 class RandomHorizontalFlip:
     def __init__(self, p=0.5):
@@ -58,6 +62,66 @@ class Normalize:
         return image, mask
 
 
+
+#OPENCV VERSION ONLY WORKS ON CPU. IF EFFICIENCY ISSUES ARISE, I WILL REWORK IT USING KORNIA.
+class CleanTransform(nn.Module):
+    """Adapted from https://docs.opencv.org/4.x/d5/daf/tutorial_py_histogram_equalization.html
+    https://docs.opencv.org/3.4/d5/db5/tutorial_laplace_operator.html
+    https://docs.opencv.org/4.x/d5/dc4/tutorial_adding_images.html
+    https://docs.opencv.org/3.4/d8/d01/group__imgproc__color__conversions.html
+    """
+    def __init__(self, clipLimit = 1.5, tileGridSize=(15, 15)) -> None:
+        super().__init__()
+        self.CLAHE = cv.createCLAHE(clipLimit, tileGridSize)
+
+    def forward(self, img: torchvision.tv_tensors.Image, mask):
+        #permute dimensions from standard tv_tensor (C,H,W) to (H,W,C) format.
+        img = img.permute(1,2,0)
+
+        #turn into numpyarray for cv, formatted (H,W,C)
+        nparray = img.detach().cpu().numpy()
+        nparray = cv.cvtColor(nparray, cv.COLOR_RGB2Lab)
+
+        #apply histogram equalization
+        nparray[:,:,0] = self.CLAHE.apply(nparray[:,:,0])
+        nparray = cv.cvtColor(nparray, cv.COLOR_Lab2RGB)
+
+        #use bilateralFilter to highlight edges
+        nparray = cv.bilateralFilter(nparray, 5, 75, 75)
+
+        #apply Laplacian function to get 3d array of edges
+        ddepth = cv.CV_16S
+        kernel_size = 3
+        edges = cv.Laplacian(nparray, ddepth, ksize=kernel_size)
+        edges = cv.convertScaleAbs(edges)
+        lpWeight = 0.35
+        nparray = cv.addWeighted(nparray, 1, edges, lpWeight, 0.0)
+
+        #unsharp mask operation
+        det = cv.GaussianBlur(nparray, (5, 5),0,0)
+        nparray = cv.addWeighted(nparray, 3, det, -2, 0.0)
+        img = torch.from_numpy(nparray)
+        img = img.permute(2,0,1)
+        img = torchvision.tv_tensors.Image(img)
+        return img, mask
+
+#For inference only, avoids converting between tensor and numpy array
+def CleanTransformInference(nparray: NDArray, CLAHE):
+    nparray = cv.cvtColor(nparray, cv.COLOR_RGB2Lab)
+    nparray[:,:,0] = CLAHE.apply(nparray[:,:,0])
+    nparray = cv.cvtColor(nparray, cv.COLOR_Lab2RGB)
+    nparray = cv.bilateralFilter(nparray, 5, 75, 75)
+    ddepth = cv.CV_16S
+    kernel_size = 3
+    edges = cv.Laplacian(nparray, ddepth, ksize=kernel_size)
+    edges = cv.convertScaleAbs(edges)
+    lpWeight = 0.35
+    nparray = cv.addWeighted(nparray, 1, edges, lpWeight, 0.0)
+    det = cv.GaussianBlur(nparray, (5, 5),0,0)
+    nparray = cv.addWeighted(nparray, 3, det, -2, 0.0)
+    return nparray
+
+
 class Compose:
     """Compose transforms sequentially."""
 
@@ -70,7 +134,7 @@ class Compose:
         return image, mask
 
 
-def get_transform(train: bool, crop_size: Tuple[int, int] = (360, 640)):
+def get_transform(train: bool, crop_size: Tuple[int, int] = (360, 640), clean = True):
     """
     Returns a transform pipeline for semantic segmentation.
 
@@ -79,6 +143,8 @@ def get_transform(train: bool, crop_size: Tuple[int, int] = (360, 640)):
         crop_size (Tuple[int,int]): Crop size (height, width) for RandomCrop.
     """
     transforms = []
+    if clean == True:
+        transforms.append(CleanTransform())
     if train:
         transforms.append(RandomHorizontalFlip(p=0.5))
         transforms.append(RandomCrop(crop_size))

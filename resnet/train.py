@@ -12,7 +12,8 @@ from helpers import (
     OUTPUT_ROOT,
     NUM_CLASSES,
 )
-
+import cv2 as cv
+import skimage.metrics
 
 NUM_EPOCHS = 2
 TRAIN_PARTITION = 0.7
@@ -34,6 +35,45 @@ if __name__ == "__main__":
     # our dataset has two classes only - background and object
     imgs = list(sorted(os.listdir(DATA_IMAGES)))
     masks = list(sorted(os.listdir(DATA_TARGETS)))
+
+#sequential structural similarity test. Barrier is generally around 0.9-0.85
+    def ssim_test(greyaccumulator, pic) -> bool:
+        for narray in greyaccumulator:
+            if skimage.metrics.structural_similarity(narray, pic, data_range=255) > 0.9:
+                return False
+        return True
+
+#culling mechanism, with a shifting window.
+    final, finalm, accumulator, greyaccumulator, maccumulator = [], [], [], [], []
+    index = 0
+    for lindex in range(len(imgs)):
+        llindex = len(imgs) - 1 - lindex
+        img_path = os.path.join(DATA_IMAGES, imgs[llindex])
+        pic = cv.imread(img_path)
+        pic = cv.cvtColor(pic, cv.COLOR_BGR2GRAY)
+        
+        if not accumulator:
+            accumulator.append(imgs[llindex])
+            greyaccumulator.append(pic)
+            maccumulator.append(masks[llindex])
+        else:
+            if ssim_test(greyaccumulator, pic): 
+                if len(accumulator) == 30:
+                    final.append(accumulator.pop(0))
+                    finalm.append(maccumulator.pop(0))
+                    greyaccumulator.pop(0)
+                    accumulator.append(imgs[llindex])
+                    maccumulator.append(masks[llindex])
+                    greyaccumulator.append(pic)
+                else:
+                    accumulator.append(imgs[llindex])
+                    maccumulator.append(masks[llindex])
+                    greyaccumulator.append(pic)
+    final.extend(accumulator)
+    finalm.extend(maccumulator)
+    imgs = final
+    masks = finalm
+
     indices = list(range(len(imgs)))
     train_indices = indices[: int(len(indices) * TRAIN_PARTITION)]
     val_indices = indices[
