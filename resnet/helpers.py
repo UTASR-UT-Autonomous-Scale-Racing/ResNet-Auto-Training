@@ -35,7 +35,7 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         dilate_mask=True,
         dilate_kernel_dimension=5,
         dilate_iterations=1,
-        train_transforms=False,
+        train_transforms=False
     ) -> None:
         self.imgs = imgs
         self.img_dir = image_dir
@@ -45,7 +45,7 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         self.dilate_mask = dilate_mask
         self.dilate_kernel_dimension = dilate_kernel_dimension
         self.dilate_iterations = dilate_iterations
-        self.transform = my_transforms.get_transform(train_transforms)
+        self.transform = my_transforms.get_transform(train_transforms, clean = not inference)
 
     def __getitem__(
         self, idx
