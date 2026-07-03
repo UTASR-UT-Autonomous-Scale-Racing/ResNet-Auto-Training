@@ -6,9 +6,9 @@ import torch
 import torch.onnx
 from helpers import (
     DATA_IMAGES,
+    DEVICE,
     NUM_CLASSES,
     OUTPUT_ROOT,
-    get_device,
     get_segmentation_model,
 )
 
@@ -18,8 +18,7 @@ PROVIDERS = [
     "CUDAExecutionProvider",
     "CPUExecutionProvider",
 ]
-from transforms import CleanTransformInference
-from torchvision.transforms import v2 as T
+from transforms import clean_image
 
 
 def export_to_onnx(
@@ -62,7 +61,7 @@ def inference_real_time_test_onnx(onnx_path, providers, imgs, device) -> None:
 
     mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225], device=device).view(3, 1, 1)
-    CLAHE = cv2.createCLAHE(clipLimit = 1.5, tileGridSize=(15, 15)) 
+    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(15, 15))
 
     for img_path in imgs:
         img_raw = cv2.imread(img_path)
@@ -70,7 +69,7 @@ def inference_real_time_test_onnx(onnx_path, providers, imgs, device) -> None:
             continue
 
         img_rgb = cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB)
-        img_rgb = CleanTransformInference(img_rgb, CLAHE)
+        img_rgb = clean_image(img_rgb, clahe)
         img_rgb = torch.from_numpy(img_rgb).permute(2, 0, 1).float() / 255.0
         img_tensor = ((img_rgb.to(device) - mean) / std).unsqueeze(0)
         x = img_tensor.contiguous().cpu().numpy()
@@ -98,8 +97,6 @@ def inference_real_time_test_onnx(onnx_path, providers, imgs, device) -> None:
 
 
 if __name__ == "__main__":
-    device = get_device()
-
     imgs = [
         os.path.join(DATA_IMAGES, img) for img in list(sorted(os.listdir(DATA_IMAGES)))
     ]
@@ -111,10 +108,14 @@ if __name__ == "__main__":
     if not os.path.exists(onnx_path):
         model = get_segmentation_model(NUM_CLASSES)
         model.load_state_dict(
-            torch.load(os.path.join(OUTPUT_ROOT, "deeplabv3_final.pth"))
+            torch.load(
+                os.path.join(OUTPUT_ROOT, "deeplabv3_final.pth"),
+                map_location=DEVICE,
+                weights_only=True,
+            )
         )
-        model.to(device)
+        model.to(DEVICE)
         export_to_onnx(model, onnx_path=onnx_path)
 
     # Use ONNX inference
-    inference_real_time_test_onnx(onnx_path, PROVIDERS, test_imgs, device=get_device())
+    inference_real_time_test_onnx(onnx_path, PROVIDERS, test_imgs, device=DEVICE)

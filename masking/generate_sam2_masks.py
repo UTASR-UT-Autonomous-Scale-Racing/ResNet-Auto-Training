@@ -61,15 +61,16 @@ def build_predictor():
 
 
 def initialize_state(predictor, frames_output_dir):
-    with torch.inference_mode(), torch.autocast(
-        device_type="cuda", dtype=torch.bfloat16
+    with (
+        torch.inference_mode(),
+        torch.autocast(device_type="cuda", dtype=torch.bfloat16),
     ):
         state = predictor.init_state(frames_output_dir)
     print("State initialized.")
     return state
 
 
-def add_inital_prompts(predictor, state, points):
+def add_initial_prompts(predictor, state, points):
     print("Adding points from prompts...")
     labels = np.array([1] * len(points), dtype=np.int8)
     predictor.add_new_points_or_box(
@@ -137,7 +138,7 @@ def propagate_and_save_masks(predictor, state, batch_prompts, frame_idx_offset, 
     curr_idx = frame_idx_offset
     batch_frame_idx = 0
     for batch_frame_idx, _, masks in predictor.propagate_in_video(state):
-        curr_idx += batch_frame_idx
+        curr_idx = frame_idx_offset + batch_frame_idx
         # Convert confident mask to binary mask
         mask = (masks[0].cpu().numpy() > 0).astype(np.uint8)
         h, w = mask.shape[-2:]
@@ -206,7 +207,7 @@ def process_video_frames(predictor, state, batch_prompts, frame_idx, debug):
     ):
         i += 1
     if i < len(batch_prompts):
-        add_inital_prompts(predictor, state, batch_prompts[i])
+        add_initial_prompts(predictor, state, batch_prompts[i])
         stopped_frame = propagate_and_save_masks(
             predictor, state, batch_prompts, frame_idx, debug
         )

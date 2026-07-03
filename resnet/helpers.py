@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import os
 from PIL import Image
+from skimage.metrics import structural_similarity
+from tqdm import tqdm
 import torch
 import transforms as my_transforms
 from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
@@ -13,6 +15,7 @@ DATA_ROOT = os.path.join("data", "dataset")
 DATA_IMAGES = os.path.join(DATA_ROOT, "images")
 DATA_TARGETS = os.path.join(DATA_ROOT, "targets")
 OUTPUT_ROOT = "checkpoints"
+DEVICE = "cuda"
 
 
 class MultiObjectMaskDataset(torch.utils.data.Dataset):
@@ -35,7 +38,7 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         dilate_mask=True,
         dilate_kernel_dimension=5,
         dilate_iterations=1,
-        train_transforms=False
+        train_transforms=False,
     ) -> None:
         self.imgs = imgs
         self.img_dir = image_dir
@@ -45,7 +48,9 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         self.dilate_mask = dilate_mask
         self.dilate_kernel_dimension = dilate_kernel_dimension
         self.dilate_iterations = dilate_iterations
-        self.transform = my_transforms.get_transform(train_transforms, clean = not inference)
+        self.transform = my_transforms.get_transform(
+            train_transforms, clean=not inference
+        )
 
     def __getitem__(
         self, idx
@@ -84,20 +89,48 @@ class MultiObjectMaskDataset(torch.utils.data.Dataset):
         return len(self.imgs)
 
 
+def cull_similar_frames(
+    imgs: List[str],
+    masks: List[str],
+    image_dir: str,
+    threshold: float = 0.9,
+    window: int = 30,
+) -> Tuple[List[str], List[str]]:
+    kept_imgs: List[str] = []
+    kept_masks: List[str] = []
+    win_imgs: List[str] = []
+    win_masks: List[str] = []
+    win_grey: List[np.ndarray] = []
+
+    def is_novel(grey: np.ndarray) -> bool:
+        return all(
+            structural_similarity(prev, grey, data_range=255) <= threshold
+            for prev in win_grey
+        )
+
+    for i in tqdm(range(len(imgs) - 1, -1, -1), desc="Culling similar frames"):
+        grey = cv2.cvtColor(
+            cv2.imread(os.path.join(image_dir, imgs[i])), cv2.COLOR_BGR2GRAY
+        )
+        if not win_imgs:
+            win_imgs.append(imgs[i])
+            win_masks.append(masks[i])
+            win_grey.append(grey)
+        elif is_novel(grey):
+            if len(win_imgs) == window:
+                kept_imgs.append(win_imgs.pop(0))
+                kept_masks.append(win_masks.pop(0))
+                win_grey.pop(0)
+            win_imgs.append(imgs[i])
+            win_masks.append(masks[i])
+            win_grey.append(grey)
+
+    kept_imgs.extend(win_imgs)
+    kept_masks.extend(win_masks)
+    return kept_imgs, kept_masks
+
+
 def get_segmentation_model(num_classes) -> torch.nn.Module:
     """Build the Deeplabv3 model with MobileNetV3-Large backbone"""
     model = deeplabv3_mobilenet_v3_large(weights=None, num_classes=num_classes)
     return model
-
-
-def get_device() -> torch.device:
-    """Returns the most appropriate device for torch
-
-    Note: mps is dubious don't use or face hair loss
-    """
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    # elif torch.backends.mps.is_available():
-    # return torch.device("mps")
-    else:
-        return torch.device("cpu")

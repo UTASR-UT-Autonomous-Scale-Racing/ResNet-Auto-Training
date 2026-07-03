@@ -1,19 +1,17 @@
 import os
-import random
 import torch
 from tqdm import tqdm
 import utils
 from helpers import (
     MultiObjectMaskDataset,
-    get_device,
+    cull_similar_frames,
     get_segmentation_model,
     DATA_IMAGES,
     DATA_TARGETS,
+    DEVICE,
     OUTPUT_ROOT,
     NUM_CLASSES,
 )
-import cv2 as cv
-import skimage.metrics
 
 NUM_EPOCHS = 2
 TRAIN_PARTITION = 0.7
@@ -26,53 +24,15 @@ NUM_WORKERS = 4
 
 
 if __name__ == "__main__":
-    # get torch device
-    device = get_device()
-
     # create directory for saving checkpoints if it doesn't exist
     os.makedirs(OUTPUT_ROOT, exist_ok=True)
 
     # our dataset has two classes only - background and object
-    imgs = list(sorted(os.listdir(DATA_IMAGES)))
-    masks = list(sorted(os.listdir(DATA_TARGETS)))
+    imgs = sorted(os.listdir(DATA_IMAGES))
+    masks = sorted(os.listdir(DATA_TARGETS))
 
-#sequential structural similarity test. Barrier is generally around 0.9-0.85
-    def ssim_test(greyaccumulator, pic) -> bool:
-        for narray in greyaccumulator:
-            if skimage.metrics.structural_similarity(narray, pic, data_range=255) > 0.9:
-                return False
-        return True
-
-#culling mechanism, with a shifting window.
-    final, finalm, accumulator, greyaccumulator, maccumulator = [], [], [], [], []
-    index = 0
-    for lindex in range(len(imgs)):
-        llindex = len(imgs) - 1 - lindex
-        img_path = os.path.join(DATA_IMAGES, imgs[llindex])
-        pic = cv.imread(img_path)
-        pic = cv.cvtColor(pic, cv.COLOR_BGR2GRAY)
-        
-        if not accumulator:
-            accumulator.append(imgs[llindex])
-            greyaccumulator.append(pic)
-            maccumulator.append(masks[llindex])
-        else:
-            if ssim_test(greyaccumulator, pic): 
-                if len(accumulator) == 30:
-                    final.append(accumulator.pop(0))
-                    finalm.append(maccumulator.pop(0))
-                    greyaccumulator.pop(0)
-                    accumulator.append(imgs[llindex])
-                    maccumulator.append(masks[llindex])
-                    greyaccumulator.append(pic)
-                else:
-                    accumulator.append(imgs[llindex])
-                    maccumulator.append(masks[llindex])
-                    greyaccumulator.append(pic)
-    final.extend(accumulator)
-    finalm.extend(maccumulator)
-    imgs = final
-    masks = finalm
+    print(f"Using {DEVICE}")
+    # imgs, masks = cull_similar_frames(imgs, masks, DATA_IMAGES)
 
     indices = list(range(len(imgs)))
     train_indices = indices[: int(len(indices) * TRAIN_PARTITION)]
@@ -82,8 +42,7 @@ if __name__ == "__main__":
         )
     ]
 
-    # split the dataset in train and test set
-    random.shuffle(train_indices)
+    # split the dataset into train and validation sets
     train_imgs = [imgs[i] for i in train_indices]
     train_masks = [masks[i] for i in train_indices]
     val_imgs = [imgs[i] for i in val_indices]
@@ -130,7 +89,7 @@ if __name__ == "__main__":
     model = get_segmentation_model(NUM_CLASSES)
 
     # move model to device
-    model.to(device)
+    model.to(DEVICE)
 
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(
@@ -140,15 +99,14 @@ if __name__ == "__main__":
         weight_decay=TRAIN_WEIGHT_DECAY,
     )
 
-    print(f"Training on {device.type}")
-
     for epoch in range(NUM_EPOCHS):
         model.train()
-
-        for images, targets in tqdm(data_loader, desc=f"Epoch {epoch+1}/{NUM_EPOCHS}"):
-            images = torch.stack([img.to(device, non_blocking=True) for img in images])
+        for images, targets in tqdm(
+            data_loader, desc=f"Epoch {epoch + 1}/{NUM_EPOCHS} [train]"
+        ):
+            images = torch.stack([img.to(DEVICE, non_blocking=True) for img in images])
             masks = torch.stack(
-                [mask.to(device, non_blocking=True) for mask in targets]
+                [mask.to(DEVICE, non_blocking=True) for mask in targets]
             )
 
             outputs = model(images)["out"]
@@ -157,6 +115,23 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+        model.eval()
+        val_loss = 0.0
+        with torch.inference_mode():
+            for images, targets in tqdm(
+                data_loader_val, desc=f"Epoch {epoch + 1}/{NUM_EPOCHS} [val]"
+            ):
+                images = torch.stack(
+                    [img.to(DEVICE, non_blocking=True) for img in images]
+                )
+                masks = torch.stack(
+                    [mask.to(DEVICE, non_blocking=True) for mask in targets]
+                )
+                outputs = model(images)["out"]
+                val_loss += criterion(outputs, masks).item()
+        val_loss /= max(len(data_loader_val), 1)
+        print(f"Epoch {epoch + 1}/{NUM_EPOCHS} - val loss: {val_loss:.4f}")
 
         torch.save(
             {

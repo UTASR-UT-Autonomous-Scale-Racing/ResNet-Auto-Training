@@ -197,7 +197,7 @@ def process_frame(
         Tuple[np.ndarray, np.ndarray, List[Tuple[int, int]]]: Processed frame, mask, and prompts.
     """
     original_frame = frame.copy()
-    frame = cv2.cvtColor(frame, eval(colorspace))
+    frame = cv2.cvtColor(frame, getattr(cv2, colorspace))
     height, width = frame.shape[:2]
     crop = int(height / 2.5)
 
@@ -336,7 +336,7 @@ if __name__ == "__main__":
         source_path,
         colorspace_min,
         colorspace_max,
-        colorspace="cv2.COLOR_BGR2XYZ",
+        colorspace="COLOR_BGR2XYZ",
         num_frames=num_frames,
         debug=debug,
         output_dir=output_dir,
